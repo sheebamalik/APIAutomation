@@ -1,32 +1,34 @@
 package com.api.service;
 
 import com.api.dto.Todo;
+import com.api.helper.RequestHelper;
+import io.cucumber.core.internal.com.fasterxml.jackson.core.JsonProcessingException;
+import io.cucumber.core.internal.com.fasterxml.jackson.databind.ObjectMapper;
 import io.cucumber.datatable.DataTable;
-import io.restassured.RestAssured;
-import io.restassured.response.Response;
 import org.junit.jupiter.api.Assertions;
 
+import java.net.http.HttpResponse;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 
 public class TestAPIService
 {
-    private static final ThreadLocal<Response> response = new ThreadLocal<>();
+    private static final ThreadLocal<HttpResponse<String>> response = new ThreadLocal<>();
     private static final ThreadLocal<Integer> actualStatusCode = new ThreadLocal<>();
     private static final ThreadLocal<Integer> expectedStatusCode = new ThreadLocal<>();
 
     public static void testGetwithoutArray()
     {
-        RestAssured.baseURI = "https://api.agify.io/";
-        RestAssured.useRelaxedHTTPSValidation();
-        setResponse(RestAssured.given().queryParam("name","meelad").when().get());
+        HttpResponse<String> result = RequestHelper.doGetRequest("https://api.agify.io/", Map.of("name", "meelad"));
+        setResponse(result);
     }
 
     public static void testGetWithArray()
     {
-        RestAssured.baseURI = "https://jsonplaceholder.typicode.com/todos";
-        RestAssured.useRelaxedHTTPSValidation();
-        setResponse(RestAssured.when().get());
+        HttpResponse<String> result = RequestHelper.doGetRequest("https://jsonplaceholder.typicode.com/todos");
+        setResponse(result);
     }
 
     public static void testPostAPI()
@@ -35,25 +37,22 @@ public class TestAPIService
                 "\"id\":1000," +
                 "\"title\":\"sampletitle\"," +
                 "\"body\":\"samplebody\"}";
-        RestAssured.baseURI = "https://jsonplaceholder.typicode.com/posts";
-        RestAssured.useRelaxedHTTPSValidation();
 
-        setResponse(RestAssured.given().body(body).when().post());
-        System.out.println(getResponse());
+        HttpResponse<String> result = RequestHelper.doPostRequest("https://jsonplaceholder.typicode.com/posts",
+                body);
+        setResponse(result);
     }
 
     public static void testDeleteAPI()
     {
-        RestAssured.baseURI = "https://jsonplaceholder.typicode.com/posts/1";
-        RestAssured.useRelaxedHTTPSValidation();
-
-        setResponse(RestAssured.when().delete());
+        HttpResponse<String> result = RequestHelper.doDeleteRequest("https://jsonplaceholder.typicode.com/posts/1");
+        setResponse(result);
     }
 
     public static void validateStatusCode(int statusCode)
     {
         setExpectedStatusCode(statusCode);
-        setActualStatusCode(getResponse().getStatusCode());
+        setActualStatusCode(getResponse().statusCode());
         if(getActualStatusCode() == getExpectedStatusCode())
         {
             Assertions.assertTrue(true, "Test passed");
@@ -68,7 +67,16 @@ public class TestAPIService
     {
         List<String> tableList = table.transpose().asList(String.class);
         String key = tableList.get(0).trim();
-        String actualStr = getResponse().getBody().jsonPath().get(key).toString();
+        String res = getResponse().body();
+        String actualStr = null;
+        try
+        {
+            actualStr = new ObjectMapper().readValue(res, HashMap.class).get(key).toString();
+        }
+        catch (JsonProcessingException e)
+        {
+            e.printStackTrace();
+        }
         if(tableList.get(1).equals(actualStr))
         {
             Assertions.assertTrue(true, "Test passed");
@@ -85,7 +93,15 @@ public class TestAPIService
         int index = Integer.parseInt(tableList.get(0).trim());
         String expValue = tableList.get(1).trim();
 
-        Todo[] responseList = getResponse().as(Todo[].class);
+        Todo[] responseList = null;
+        try
+        {
+            responseList = new ObjectMapper().readValue(getResponse().body(), Todo[].class);
+        }
+        catch (JsonProcessingException e)
+        {
+            e.printStackTrace();
+        }
         String actualStr = responseList[index].getId();
         if(actualStr.equals(expValue))
         {
@@ -97,7 +113,7 @@ public class TestAPIService
         }
     }
 
-    public static Response getResponse()
+    public static HttpResponse<String> getResponse()
     {
         return response.get();
     }
@@ -112,7 +128,7 @@ public class TestAPIService
         return expectedStatusCode.get();
     }
 
-    public static void setResponse(Response res)
+    public static void setResponse(HttpResponse<String> res)
     {
         response.set(res);
     }
